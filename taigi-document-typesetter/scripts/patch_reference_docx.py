@@ -5,6 +5,11 @@ Pandoc's --reference-doc inherits styles from this file. We need EVERY style
 to carry an explicit <w:rFonts> set, otherwise body content using styles like
 BodyText (which by default has no <w:rPr>) falls back to Calibri instead of
 inheriting from rPrDefault under some renderers.
+
+Usage: patch_reference_docx.py [reference.docx] [reference_genyo.docx]
+  Defaults: <script dir>/../assets/reference.docx -> .../reference_genyo.docx
+  Create the stock input with:
+    pandoc -o assets/reference.docx --print-default-data-file reference.docx
 """
 import re
 import shutil
@@ -115,19 +120,26 @@ def patch_settings(xml: str) -> str:
     return xml.replace('</w:settings>', f'{LINE_BREAK_RULES}</w:settings>', 1)
 
 
-def main() -> int:
-    if DST.exists():
-        DST.unlink()
-    shutil.copy(SRC, DST)
+def main(argv: list[str]) -> int:
+    src = Path(argv[1]) if len(argv) > 1 else SRC
+    dst = Path(argv[2]) if len(argv) > 2 else DST
+    if not src.exists():
+        print(f"missing: {src}\n  create it with: pandoc -o {src} "
+              "--print-default-data-file reference.docx", file=sys.stderr)
+        return 1
+    if dst.exists():
+        dst.unlink()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(src, dst)
 
-    with zipfile.ZipFile(DST, "r") as z:
+    with zipfile.ZipFile(dst, "r") as z:
         styles = z.read("word/styles.xml").decode("utf-8")
         settings = z.read("word/settings.xml").decode("utf-8")
     patched_styles = patch_styles(styles)
     patched_settings = patch_settings(settings)
 
-    tmp = DST.with_suffix(".tmp.docx")
-    with zipfile.ZipFile(DST, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+    tmp = dst.with_suffix(".tmp.docx")
+    with zipfile.ZipFile(dst, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.namelist():
             if item == "word/styles.xml":
                 data = patched_styles.encode("utf-8")
@@ -136,10 +148,10 @@ def main() -> int:
             else:
                 data = zin.read(item)
             zout.writestr(item, data)
-    tmp.replace(DST)
-    print(f"patched → {DST}")
+    tmp.replace(dst)
+    print(f"patched → {dst}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

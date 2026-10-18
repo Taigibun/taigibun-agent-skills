@@ -1,61 +1,64 @@
 ---
 name: taigi-roman-orthography-converter
-description: Expertise in converting Taigi Roman Orthography between POJ (Pe̍h-ōe-jī) and KPL (Kàu-io̍k Pō͘ Lô-má-jī) in both Input (tone numbers) and Unicode (diacritics) formats.
+description: Converts and validates Taigi Roman Orthography between POJ (Pe̍h-ōe-jī) and KPL (Kàu-io̍k Pō͘ Lô-má-jī), each in Input (tone numbers) and Unicode (diacritics) form, including tone-mark placement rules and the KonvertToPoj library API. Use whenever text like tai5-gi2, Tâi-gí, tsit8-e5 or tsi̍t-ê must be converted, checked or have its tone marks corrected, and whenever someone mentions Tâi-lô, TL, POJ, KPL, lomaji or lô-má-jī.
 ---
 
-# KonvertToPoj
+# Taigi Roman Orthography Converter
 
 ## Guidelines
 
-- **Orthography**: Always use the term **Roman Orthography** instead of "Romanization". Prefer **Taigi Latin-script Orthography** or **Taigi Roman-script Orthography**.
-- **Naming**: Refer to the language as **Taigi**. Avoid "Taiwanese Southern Min", "Holo", or "Taiwanese Hokkien".
+- **Orthography**: always say **Roman Orthography**, never "Romanization". Prefer **Taigi Latin-script Orthography** or **Taigi Roman-script Orthography**.
+- **Naming**: the language is **Taigi**. Avoid "Taiwanese Southern Min", "Holo" and "Taiwanese Hokkien". The official standard is **KPL**; do not call it Tâi-lô or TL.
 
 ## Overview
 
-This skill specializes in converting and normalizing Taigi Roman Orthography using the logic from the `KonvertToPoj` library. It handles 12 conversion directions between POJ/KPL and Input/Unicode formats.
+Backed by the Kotlin Multiplatform library **KonvertToPoj** (0.6.0). It handles the 12 directions between POJ/KPL × Input/Unicode, validation, and POJ normalization. Read `references/linguistic_rules.md` before any manual conversion; read `references/api_summary.md` before calling the library.
 
-## Core Capabilities
+## Core capabilities
 
-### 1. Format Conversion
-- **POJ_INPUT** $\leftrightarrow$ **POJ_UNICODE**
-- **KPL_INPUT** $\leftrightarrow$ **KPL_UNICODE**
-- **POJ** $\leftrightarrow$ **KPL** (Cross-system)
+1. **Format conversion:** `POJ_INPUT ↔ POJ_UNICODE`, `KPL_INPUT ↔ KPL_UNICODE`, and POJ ↔ KPL across systems. Only syllable-shaped tokens are converted; English words pass through untouched.
+2. **Normalization:** tone marks moved to the correct vowel, Han-Lo spacing and punctuation width, diacritic repair. Foreign words survive in the Hybrid variants.
+3. **Validation:** whitelist-based phonotactics, strictly separated per system (`ch` is never valid KPL, `ts` never valid POJ).
 
-### 2. Normalization
-- **Tone-mark Placement**: Automatically moves tone marks to the correct vowel according to linguistic rules.
-- **Han-Lo Spacing**: Fixes spacing and punctuation around Hanji and Roman Orthography.
-- **Punctuation Width**: Converts between half-width and full-width punctuation based on the context.
+## Conversion pipeline (manual or when checking the library)
 
-### 3. Validation
-- Validates syllables against linguistically correct Taiwanese phonotactics (whitelist-based).
-- Validation-aware normalization (preserves foreign words like "Tennessee").
+1. **NFC-normalize** the input.
+2. **Map the orthography:** initials, vowels and finals per the target system (`ch` → `ts`, `oa` → `ua`, `ek` → `ik`, `o͘` → `oo`, `ⁿ` → `nn`).
+3. **Re-place the tone mark** by the target system's rules; POJ and KPL differ on compound vowels.
+4. **Special characters:** `o͘` is o + U+0358, `ⁿ` is U+207F, tone 8 is U+030D, tone 9 is breve (POJ) or double acute (KPL).
 
-## Conversion Pipeline
-
-When converting text manually or verifying logic, follow these steps:
-1.  **Normalization:** Ensure input text is NFC-normalized.
-2.  **Orthographic Mapping:** Swap initials, vowels, and finals based on the target system (e.g., POJ `ch` → KPL `ts`).
-3.  **Tone Re-placement:** Re-calculate the position of tone marks based on the rules of the target system (POJ rules differ from KPL rules for compound vowels).
-4.  **Special Characters:** Ensure correct Unicode representation for system-specific markers (e.g., POJ `o͘` vs KPL `oo`).
-
-### Quick Reference Table
+### Quick reference
 
 | Feature | POJ | KPL |
 | :--- | :--- | :--- |
 | **Initials** | `ch` / `chh` | `ts` / `tsh` |
 | **Vowels** | `oa` / `oe` | `ua` / `ue` |
-| **Open 'o'** | `o͘` | `oo` |
+| **Finals** | `ek` / `eng` | `ik` / `ing` |
+| **Open o** | `o͘` | `oo` |
 | **Nasalization** | `ⁿ` | `nn` |
 
-## Usage Patterns
+### Tone placement in one line each
+
+- **POJ:** mark the 2nd letter from the right; if that is `i`, mark the rightmost letter instead; in a checked syllable whose 2nd-from-right is `i` or `u`, mark the 3rd (except `iuh`). `ng` counts as one letter, `ⁿ` counts as nothing, `o͘` is one unit.
+- **KPL:** mark `a` if present, else the rightmost vowel (`oo` → left `o`), else the nasal.
+
+## Things that surprise people
+
+- `POJ_UNICODE ↔ KPL_UNICODE` is direct: digits in the text are never read as tones unless `viaInputForm = true`.
+- `normalizePoj*` runs a strict KPL → POJ pre-pass: `Tsai` → `Chai`.
+- A tone digit glued to a checked syllable in input form is consumed in 0.6.0: `gah1` → `gah`.
+- From `POJ_INPUT`, `ou` is read as `oo`, but `ou` never validates.
+
+## Usage patterns
 
 - "Convert this POJ input `tai5-gi2` to Unicode."
-- "Normalize the tone marks in this text: `Ta̍i-gi̍`."
-- "Fix the spacing in this Han-Lo sentence: `我 是 lâng , Lí hó .`"
+- "Convert this POJ Unicode text to KPL."
+- "Normalize the tone marks in `Ta̍i-gi̍`."
+- "Is `chn̂g` a valid POJ syllable?"
+- "Fix the spacing in this Han-Lo sentence: `我 是 lâng , Lí hó .`" (then also read `taigi-han-lo-formatter`)
 
 ## Resources
 
-### references/
-- `linguistic_rules.md`: Detailed linguistic rules for tone placement and system-specific differences. **MUST** read before complex conversions.
-- `api_summary.md`: Summary of methods like `convertHybrid`, `isValidSyllable`, and `normalizePojHanLo`.
-- `format_examples.md`: Table of formats (Input vs Unicode).
+- `references/linguistic_rules.md`: tone placement and orthographic differences in full. **Read before complex conversions.**
+- `references/api_summary.md`: every public method, `ConvertOptions`, known behaviours, Gradle wiring.
+- `references/format_examples.md`: the four formats with worked conversion and normalization examples.
